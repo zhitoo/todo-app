@@ -1,0 +1,75 @@
+version: '3'
+services:
+    php:
+        build:
+            context: ./docker-files/runtimes/php8.3
+            dockerfile: Dockerfile
+            args:
+                USER_ID: 1000
+                GROUP_ID: 1000
+        restart: unless-stopped
+        container_name: php-todo-app
+        tty: true
+        volumes:
+            - ./:/var/www/html
+            - ./docker-files/runtimes/php8.3/local.ini:/usr/local/etc/php/conf.d/local.ini
+        networks:
+            - todo-app
+    nginx:
+        image: nginx:alpine
+        restart: unless-stopped
+        tty: true
+        container_name: nginx-todo-app
+        ports:
+            - '4500:80'
+        volumes:
+            - ./:/var/www/html
+            - ./docker-files/nginx/conf.d/:/etc/nginx/conf.d/
+        links:
+            - php
+        depends_on:
+            - php
+        networks:
+            - todo-app
+    mysql:
+        image: 'mysql/mysql-server:8.0'
+        ports:
+            - '3308:3306'
+        env_file:
+            - ".env"
+        environment:
+            MYSQL_ROOT_PASSWORD: '${DB_PASSWORD}'
+            MYSQL_ROOT_HOST: "%"
+            MYSQL_DATABASE: '${DB_DATABASE}'
+            MYSQL_USER: '${DB_USERNAME}'
+            MYSQL_PASSWORD: '${DB_PASSWORD}'
+            MYSQL_ALLOW_EMPTY_PASSWORD: 1
+        container_name: mysql-todo-app
+        volumes:
+            - 'mysql-todo-app:/var/lib/mysql'
+        networks:
+            - todo-app
+        healthcheck:
+            test: [ "CMD", "mysqladmin", "ping", "-p${DB_PASSWORD}" ]
+            retries: 3
+            timeout: 5s
+    phpmyadmin:
+        depends_on:
+            - mysql
+        image: phpmyadmin/phpmyadmin
+        restart: always
+        container_name: phpmyadmin-todo-app
+        ports:
+            - '8181:80'
+        environment:
+            PMA_HOST: mysql
+            MYSQL_ROOT_PASSWORD: '${DB_PASSWORD}'
+        networks:
+            - todo-app
+
+networks:
+    todo-app:
+        driver: bridge
+volumes:
+    mysql-todo-app:
+        driver: local
